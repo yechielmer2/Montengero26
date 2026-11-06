@@ -1,6 +1,10 @@
 name: TMB July 2027 calendar availability monitor
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - 'tmb-monitor/monitor.py'
+      - '.github/workflows/tmb-monitor.yml'
   schedule:
     - cron: '3,13,23,33,43,53 * * * *'
 permissions:
