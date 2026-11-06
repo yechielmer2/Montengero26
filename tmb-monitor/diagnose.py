@@ -1,4 +1,5 @@
-"""Read-only HTML structure diagnostics. Never announce bookability."""
+"""Read-only July 2027 calendar inspection. No alerts or booking assertions."""
+import collections
 import re
 import requests
 from bs4 import BeautifulSoup
@@ -14,17 +15,23 @@ for name, url in HUTS.items():
         response.raise_for_status()
         soup = BeautifulSoup(response.text, "html.parser")
         calendar = soup.select_one(".calendar-dispo")
-        print(f"{name}: HTTP {response.status_code}; calendar={bool(calendar)}")
         if not calendar:
-            continue
-        # Print a small sanitized excerpt of calendar markup and class names.
-        markup = str(calendar)
-        markup = re.sub(r'(?i)(token|key|secret|password|authorization)([=:"\\s]+)[^\\s"<>]+', r'\\1=[redacted]', markup)
-        print("  Calendar HTML prefix:", markup[:3500])
-        print("  Calendar tag classes:", sorted({x for tag in calendar.find_all(True) for x in (tag.get("class") or []) if "day" in x or "dispo" in x or "calendar" in x})[:60])
-        print("  Calendar data attrs:", [(tag.name, {k:v for k,v in tag.attrs.items() if k.startswith("data-")}) for tag in calendar.find_all(True) if any(k.startswith("data-") for k in tag.attrs)][:12])
-        print("  Script src paths:", [s.get("src") for s in soup.select("script[src]") if re.search("calend|dispo|reserv", s.get("src",""), re.I)][:8])
-        print("  July 2027 text excerpt:", calendar.get_text(" ",strip=True).split("Juillet 2027",1)[-1][:170] if "Juillet 2027" in calendar.get_text(" ",strip=True) else "not found")
+            raise ValueError("Calendar not found")
+        cells = calendar.select(".cal-cell[title]")
+        july = []
+        for cell in cells:
+            title = cell.get("title", "")
+            if re.search(r"\\b\\d{2}/07/2027\\b", title):
+                classes = [c for c in cell.get("class", []) if c.startswith("cal-cell--")]
+                places = cell.select_one(".cal-cell__places")
+                july.append((title, ",".join(classes), places.get_text(" ", strip=True) if places else None, cell.name))
+        print(f"{name}: HTTP {response.status_code}; July dated cells={len(july)}")
+        print("  Class counts:", dict(collections.Counter(x[1] for x in july)))
+        for row in july:
+            print("  ", repr(row))
+        if len(july) != 31:
+            print("  WARNING: not all 31 dates found; parser cannot verify July")
+        print("  Other available examples (not July):", [(x.get("title"), (x.select_one(".cal-cell__places").get_text(" ",strip=True) if x.select_one(".cal-cell__places") else None)) for x in calendar.select(".cal-cell--dispo[title]")[:3]])
     except Exception as exc:
-        print(f"{name}: failed ({type(exc).__name__}: {exc})")
-print("DIAGNOSTIC ONLY: no availability assertions, no email, no reservations.")
+        print(f"{name}: ERROR {type(exc).__name__}: {exc}")
+print("READ ONLY. No notifications. Counts alone do not guarantee booking for two.")
