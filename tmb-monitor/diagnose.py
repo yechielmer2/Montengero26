@@ -1,4 +1,4 @@
-"""Read-only diagnostic. Never interprets or announces booking availability."""
+"""Read-only diagnostics for the TMB calendar; never assert availability."""
 import re
 import requests
 from bs4 import BeautifulSoup
@@ -14,13 +14,25 @@ for name, url in HUTS.items():
         response.raise_for_status()
         soup = BeautifulSoup(response.text, "html.parser")
         text = soup.get_text(" ", strip=True)
-        month = "Juillet 2027"
-        print(f"{name}: HTTP {response.status_code}; calendar heading={('Calendrier des disponibilités' in text)}; July 2027={month in text}")
-        if month in text:
-            snippet = text.split(month, 1)[1][:350]
-            print("  Calendar excerpt (unverified):", re.sub(r"\\s+", " ", snippet))
-        else:
-            print("  No July calendar; no availability inference")
+        print(f"{name}: HTTP {response.status_code}; calendar heading={'Calendrier des disponibilités' in text}; July 2027={'Juillet 2027' in text}")
+        # Inspect DOM semantics around the month rather than treating visible dashes as counts.
+        match = soup.find(string=lambda s: bool(s and 'Juillet 2027' in s))
+        if match:
+            node = match.parent
+            for depth in range(4):
+                if node is None:
+                    break
+                raw = str(node)
+                if len(raw) > 1500:
+                    raw = raw[:1500] + ' [truncated]'
+                print(f"  July DOM ancestor {depth}: {raw}")
+                node = node.parent
+        print("  Availability-related markup attributes (sample):")
+        candidates = soup.select('[data-date], [data-availability], [data-places], [class*=disponib], [class*=calendar], [class*=calendrier]')
+        for tag in candidates[:8]:
+            attrs = {k: v for k, v in tag.attrs.items() if k in ('class','data-date','data-availability','data-places','title','aria-label')}
+            print(f"   <{tag.name}> attrs={attrs} text={tag.get_text(' ', strip=True)[:80]!r}")
+        print(f"  Candidate elements: {len(candidates)}")
     except Exception as exc:
         print(f"{name}: failed ({type(exc).__name__}: {exc})")
 print("DIAGNOSTIC ONLY: no availability assertions, no email, no reservations.")
