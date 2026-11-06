@@ -21,7 +21,7 @@ for name, url in HUTS.items():
         july = []
         for cell in cells:
             title = cell.get("title", "")
-            if re.search(r"\\b\\d{2}/07/2027\\b", title):
+            if re.search(r"\b\d{2}/07/2027\b", title):
                 classes = [c for c in cell.get("class", []) if c.startswith("cal-cell--")]
                 places = cell.select_one(".cal-cell__places")
                 july.append((title, ",".join(classes), places.get_text(" ", strip=True) if places else None, cell.name))
