@@ -1,12 +1,17 @@
 name: TMB read-only diagnostic
 on:
   workflow_dispatch:
+  schedule:
+    - cron: '7,37 * * * *'
   push:
     paths:
       - 'tmb-monitor/diagnose.py'
       - '.github/workflows/tmb-diagnostic.yml'
 permissions:
   contents: read
+concurrency:
+  group: tmb-diagnostic
+  cancel-in-progress: false
 jobs:
   inspect:
     runs-on: ubuntu-latest
