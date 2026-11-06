@@ -77,7 +77,7 @@ def main():
     api = f"https://api.github.com/repos/{repo}/issues"
     headers = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"}
     # Open issue per date, deduplicated by exact marker in title; close when no longer available.
-    response = requests.get(api, headers=headers, params={"state":"open","per_page":100,"labels":"tmb-july-2027"}, timeout=30)
+    response = requests.get(api, headers=headers, params={"state":"open","per_page":100}, timeout=30)
     response.raise_for_status()
     existing = {issue["title"]: issue for issue in response.json() if "pull_request" not in issue}
     desired = {}
@@ -98,10 +98,7 @@ def main():
                 "**Not a confirmed reservation for two guests.** Inventory can change, and a booking must be verified in the reservation flow. "
                 "Check the official booking page promptly.\n\n"
                 "This issue was created automatically after validating all 31 July dates for each of three huts.")
-        response = requests.post(api, headers=headers, json={"title":title,"body":body,"labels":["tmb-july-2027"],"assignees":[repo.split("/")[0]]}, timeout=30)
-        if response.status_code == 422:
-            # Label may not exist yet; retry without label, retaining assignment for email notification.
-            response = requests.post(api, headers=headers, json={"title":title,"body":body,"assignees":[repo.split("/")[0]]}, timeout=30)
+        response = requests.post(api, headers=headers, json={"title":title,"body":body,"assignees":[repo.split("/")[0]]}, timeout=30)
         response.raise_for_status()
         print("Created calendar availability issue:", title)
     return 0
