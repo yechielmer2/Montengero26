@@ -11,7 +11,7 @@ HUTS = {
     "soleil": ("Les Chambres du Soleil", "https://montourdumontblanc.com/fr/refuges/les-chambres-du-soleil"),
     "mottets": ("Refuge des Mottets", "https://montourdumontblanc.com/fr/refuges/refuge-des-mottets"),
 }
-DATE_RE = re.compile(r"^(\d{2})/07/2027\s+—\s+(.+)$")
+DATE_RE = re.compile(r"^(\d{2})/(07|08)/2027\s+—\s+(.+)$")
 
 def extract(html):
     calendar = BeautifulSoup(html, "html.parser").select_one(".calendar-dispo")
@@ -23,13 +23,16 @@ def extract(html):
         if not match:
             continue
         day = int(match.group(1))
-        dt.date(2027, 7, day)
-        if day in results:
-            raise ValueError("Duplicate July date")
+        month = int(match.group(2))
+        if month == 8 and day > 15:
+            continue
+        date = dt.date(2027, month, day)
+        if date in results:
+            raise ValueError("Duplicate date")
         classes = set(cell.get("class", []))
         status = classes & {"cal-cell--dispo", "cal-cell--full", "cal-cell--closed"}
         if len(status) != 1:
-            raise ValueError(f"Unknown calendar status on July {day}")
+            raise ValueError(f"Unknown calendar status on {date}")
         places_node = cell.select_one(".cal-cell__places")
         places = places_node.get_text(strip=True) if places_node else ""
         if "cal-cell--dispo" in status:
@@ -39,14 +42,15 @@ def extract(html):
             # Require agreement between the number displayed and the title.
             if not re.search(rf"\b{count}\s+disponibles?\b", match.group(2), re.I):
                 raise ValueError(f"Count/title mismatch on July {day}")
-            results[day] = count
+            results[date] = count
         else:
             if places not in ("–", "-", ""):
                 raise ValueError(f"Unexpected unavailable count on July {day}")
-            results[day] = 0
-    if set(results) != set(range(1, 32)):
-        raise ValueError(f"Incomplete July 2027 calendar: {len(results)}/31")
-    return {day: count for day, count in results.items() if count >= 2}
+            results[date] = 0
+    expected = {dt.date(2027, 7, d) for d in range(1, 32)} | {dt.date(2027, 8, d) for d in range(1, 16)}
+    if set(results) != expected:
+        raise ValueError(f"Incomplete July 1 - August 15, 2027 calendar: {len(results)}/46")
+    return {date: count for date, count in results.items() if count >= 2}
 
 def main():
     found = []
@@ -56,9 +60,9 @@ def main():
             r = requests.get(url, timeout=30, headers={"User-Agent": "Personal TMB accommodation availability monitor (GitHub Actions)"})
             r.raise_for_status()
             days = extract(r.text)
-            print(f"{name}: verified July cells=31; days with >=2 displayed places={len(days)}")
-            for day, count in sorted(days.items()):
-                found.append((slug, name, url, day, count))
+            print(f"{name}: verified July-August cells=46; days with >=2 displayed places={len(days)}")
+            for date, count in sorted(days.items()):
+                found.append((slug, name, url, date, count))
         except (requests.RequestException, ValueError) as exc:
             errors.append(f"{name}: {exc}")
     # Fail closed: do not send any alert when any source fails validation.
@@ -67,7 +71,7 @@ def main():
             print("ERROR", error, file=sys.stderr)
         return 1
     if not found:
-        print("No July 2027 dates with >=2 displayed places in the official calendars.")
+        print("No July 1 - August 15, 2027 dates with >=2 displayed places in the official calendars.")
         return 0
     token = os.environ.get("GH_TOKEN")
     repo = os.environ.get("GITHUB_REPOSITORY")
@@ -81,12 +85,12 @@ def main():
     response.raise_for_status()
     existing = {issue["title"]: issue for issue in response.json() if "pull_request" not in issue}
     desired = {}
-    for slug, name, url, day, count in found:
-        date = f"2027-07-{day:02d}"
-        title = f"[TMB July 2027] {slug} {date} (>=2 displayed places)"
-        desired[title] = (name, url, date, count)
+    for slug, name, url, date, count in found:
+        date_str = date.isoformat()
+        title = f"[TMB July 2027] {slug} {date_str} (>=2 displayed places)"
+        desired[title] = (name, url, date_str, count)
     for title, issue in existing.items():
-        if title not in desired:
+        if title.startswith("[TMB July 2027] ") and title not in desired:
             response = requests.patch(issue["url"], headers=headers, json={"state":"closed","state_reason":"completed"}, timeout=30)
             response.raise_for_status()
             print("Closed no-longer-current alert:", title)
@@ -97,7 +101,7 @@ def main():
                 f"Source: {url}\n\n"
                 "**Not a confirmed reservation for two guests.** Inventory can change, and a booking must be verified in the reservation flow. "
                 "Check the official booking page promptly.\n\n"
-                "This issue was created automatically after validating all 31 July dates for each of three huts.")
+                "This issue was created automatically after validating July 1 through August 15 for each of three huts.")
         response = requests.post(api, headers=headers, json={"title":title,"body":body,"assignees":[repo.split("/")[0]]}, timeout=30)
         response.raise_for_status()
         print("Created calendar availability issue:", title)
