@@ -37,15 +37,15 @@ def extract(html):
         places = places_node.get_text(strip=True) if places_node else ""
         if "cal-cell--dispo" in status:
             if not places.isdecimal() or int(places) < 1:
-                raise ValueError(f"Invalid available count on July {day}")
+                raise ValueError(f"Invalid available count on {date}")
             count = int(places)
             # Require agreement between the number displayed and the title.
-            if not re.search(rf"\b{count}\s+disponibles?\b", match.group(2), re.I):
-                raise ValueError(f"Count/title mismatch on July {day}")
+            if not re.search(rf"\b{count}\s+disponibles?\b", match.group(3), re.I):
+                raise ValueError(f"Count/title mismatch on {date}")
             results[date] = count
         else:
             if places not in ("–", "-", ""):
-                raise ValueError(f"Unexpected unavailable count on July {day}")
+                raise ValueError(f"Unexpected unavailable count on {date}")
             results[date] = 0
     expected = {dt.date(2027, 7, d) for d in range(1, 32)} | {dt.date(2027, 8, d) for d in range(1, 16)}
     if set(results) != expected:
